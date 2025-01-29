@@ -2,12 +2,8 @@ import tweepy
 import os
 from time import sleep
 import openai
-
-
 from dotenv import load_dotenv
 
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
 # Carrega variáveis de ambiente
 load_dotenv()
 
@@ -21,7 +17,7 @@ bearer_token = os.getenv("TWITTER_BEARER_TOKEN")
 # Credenciais da API do ChatGPT (OpenAI)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-
+# Inicializa o cliente do Tweepy
 client = tweepy.Client(
     bearer_token=bearer_token,
     consumer_key=consumer_key,
@@ -31,7 +27,6 @@ client = tweepy.Client(
     wait_on_rate_limit=True,
 )
 
-# Teste de billing DOIS
 # Função para obter o ID do usuário autenticado
 def get_user_id():
     try:
@@ -73,19 +68,34 @@ def generate_chatgpt_response(tweet_text):
         print(f"Erro ao gerar resposta com ChatGPT: {e}")
         return "Desculpe, algo deu errado ao gerar minha resposta."
 
+# Função para carregar o último ID processado
+def load_last_processed_id():
+    try:
+        with open("last_processed_id.txt", "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return None
+
+# Função para salvar o último ID processado
+def save_last_processed_id(tweet_id):
+    with open("last_processed_id.txt", "w") as file:
+        file.write(str(tweet_id))
 
 # Função para responder a menções com base no tweet original
-def reply_to_mentions(last_mention_id=None):
+def reply_to_mentions():
     user_id = get_user_id()
     if not user_id:
         print("Não foi possível obter o ID do usuário.")
         return
 
+    # Carrega o último ID processado
+    last_processed_id = load_last_processed_id()
+
     try:
         # Busca menções ao bot desde o último ID processado
         mentions = client.get_users_mentions(
             id=user_id,
-            since_id=last_mention_id,
+            since_id=last_processed_id,
             max_results=20,
             tweet_fields=["id", "author_id", "referenced_tweets"],
         )
@@ -94,7 +104,6 @@ def reply_to_mentions(last_mention_id=None):
             print(f"Encontradas {len(mentions.data)} menções.")
             for mention in mentions.data:
                 referenced_tweet_id = None
-
                 # Verifica se há um tweet referenciado (o tweet original)
                 if mention.referenced_tweets:
                     for ref in mention.referenced_tweets:
@@ -128,21 +137,16 @@ def reply_to_mentions(last_mention_id=None):
                     print(f"Erro ao responder ao tweet {mention.id}: {e}")
                 
                 # Atualiza o ID da última menção processada
-                last_mention_id = mention.id
+                save_last_processed_id(mention.id)
         else:
             print("Nenhuma menção nova encontrada.")
     except tweepy.errors.TweepyException as e:
         print(f"Erro ao buscar ou responder menções: {e}")
 
 # Loop para rodar continuamente
-if __name__ == "__main__":
-    last_id = None
+if name == "main":
     while True:
         print("Verificando menções...")
-        reply_to_mentions(last_id)
+        reply_to_mentions()
         print("Aguardando 2 minutos antes da próxima verificação...")
         sleep(120)  # Aguarda 2 minutos para evitar atingir os limites da API
-
-
-
-
